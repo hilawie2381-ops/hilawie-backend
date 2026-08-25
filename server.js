@@ -9,7 +9,16 @@ const auth = require('./middleware/auth');
 const sanitize = require('./middleware/sanitize');
 
 const app = express();
-app.use(cors());
+
+// =========================================================
+// አዲሱ የ CORS ህግ: ከሞባይል አፕ (APK) ለሚመጡ ጥያቄዎች በሩን ክፍት ያደርጋል
+// =========================================================
+app.use(cors({
+    origin: '*', 
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 app.use(express.json());
 
 // =========================================================

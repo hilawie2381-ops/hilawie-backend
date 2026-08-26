@@ -73,42 +73,49 @@ router.post('/expense', (req, res) => {
     });
 });
 
-// 6. በተመረጠው ቀን የተመዘገቡትን ማምጫ (አዲሱ የትርፍ ስሌት የተጨመረበት 🚀)
+// 6. የተያዘን አልጋ መሰረዣ (አዲሱ ራውት 🚀)
+router.post('/cancel-booking', (req, res) => {
+    const { sale_id, room_id } = req.body;
+    // የተመዘገበውን ሒሳብ እና የደንበኛ መረጃ ከዳታቤዝ ያጠፋዋል
+    db.query(`DELETE FROM room_sales WHERE id = ?`, [sale_id], (err) => {
+        if (err) return res.status(500).json({ error: err.message });
+        // ክፍሉን ክፍት (Available) ያደርገዋል
+        db.query(`UPDATE rooms SET status = 'Available', guest_name = NULL, checkout_date = NULL WHERE id = ?`, [room_id], (err2) => { 
+            if (err2) return res.status(500).json({ error: err2.message }); 
+            res.json({ message: 'ምዝገባው ተሰርዟል' }); 
+        });
+    });
+});
+
+// 7. በተመረጠው ቀን የተመዘገቡትን ማምጫ
 router.get('/data-by-date', autoCheckout, (req, res) => {
     const { date } = req.query;
     
-    // የዕለቱ ኪራይ ዳታ
-    db.query(`SELECT r.room_number, rs.amount_paid FROM room_sales rs JOIN rooms r ON rs.room_id = r.id WHERE rs.sale_date = ?`, [date], (err1, roomSales) => {
+    // የዕለቱ ኪራይ ዳታ (የደንበኛውን ሙሉ መረጃ ይዞ እንዲወጣ ተደርጓል 🚀)
+    db.query(`SELECT rs.id as sale_id, r.id as room_id, r.room_number, rs.amount_paid, rs.guest_name, rs.city, rs.phone, rs.stay_days FROM room_sales rs JOIN rooms r ON rs.room_id = r.id WHERE rs.sale_date = ?`, [date], (err1, roomSales) => {
         if (err1) return res.status(500).json({ error: err1.message });
         
-        // የዕለቱ ትርፍ ገቢ ዳታ
         db.query(`SELECT * FROM pension_extra_income WHERE income_date = ?`, [date], (err2, extraIncomes) => {
             if (err2) return res.status(500).json({ error: err2.message });
             
-            // የዕለቱ ወጪ ዳታ
             db.query(`SELECT * FROM pension_expenses WHERE expense_date = ?`, [date], (err3, expenses) => {
                 if (err3) return res.status(500).json({ error: err3.message });
                 
-                // === አዲሱ የሳምንት፣ የወር እና ዓመት ትርፍ ስሌት (Period Summary) ===
                 const summaryQuery = `
                   SELECT
-                    -- የሳምንት ትርፍ
                     (SELECT COALESCE(SUM(amount_paid), 0) FROM room_sales WHERE YEARWEEK(sale_date, 1) = YEARWEEK(?, 1)) +
                     (SELECT COALESCE(SUM(amount), 0) FROM pension_extra_income WHERE YEARWEEK(income_date, 1) = YEARWEEK(?, 1)) -
                     (SELECT COALESCE(SUM(cost), 0) FROM pension_expenses WHERE YEARWEEK(expense_date, 1) = YEARWEEK(?, 1)) AS weekly,
                     
-                    -- የወር ትርፍ
                     (SELECT COALESCE(SUM(amount_paid), 0) FROM room_sales WHERE MONTH(sale_date) = MONTH(?) AND YEAR(sale_date) = YEAR(?)) +
                     (SELECT COALESCE(SUM(amount), 0) FROM pension_extra_income WHERE MONTH(income_date) = MONTH(?) AND YEAR(income_date) = YEAR(?)) -
                     (SELECT COALESCE(SUM(cost), 0) FROM pension_expenses WHERE MONTH(expense_date) = MONTH(?) AND YEAR(expense_date) = YEAR(?)) AS monthly,
                     
-                    -- የዓመት ትርፍ
                     (SELECT COALESCE(SUM(amount_paid), 0) FROM room_sales WHERE YEAR(sale_date) = YEAR(?)) +
                     (SELECT COALESCE(SUM(amount), 0) FROM pension_extra_income WHERE YEAR(income_date) = YEAR(?)) -
                     (SELECT COALESCE(SUM(cost), 0) FROM pension_expenses WHERE YEAR(expense_date) = YEAR(?)) AS yearly
                 `;
                 
-                // ፓራሜትሮቹን ለ SQL እናቀብላለን (12 ጊዜ ቀኑን እናስገባለን)
                 const d = date;
                 const params = [d, d, d, d, d, d, d, d, d, d, d, d];
                 

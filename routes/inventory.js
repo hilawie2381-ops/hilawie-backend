@@ -4,7 +4,6 @@ const router = express.Router();
 const db = require('../db');
 
 router.get('/items', (req, res) => {
-    // ዕቃው ካለቀ (ከሚኒመም በታች ከሆነ) is_low = 1 ይሆናል
     db.query(`SELECT *, (stock_quantity <= min_alert_level) as is_low FROM inventory ORDER BY is_low DESC, id DESC`, (err, results) => {
         if(err) return res.status(500).json({error: err.message}); res.json(results);
     });
@@ -24,12 +23,24 @@ router.post('/update-stock', (req, res) => {
     });
 });
 
-// 🚀 አዲሱ በስህተት የተገባን ዕቃ ማጥፊያ (Delete) ራውት
+// 🚀 የተሻሻለው የዕቃ ማጥፊያ ራውት (ካፌው ጋር መገናኘቱን ያጣራል)
 router.post('/delete-item', (req, res) => {
-    const { item_id } = req.body;
-    db.query(`DELETE FROM inventory WHERE id = ?`, [item_id], (err) => {
+    const { item_id, item_name } = req.body;
+    
+    // በመጀመሪያ ካፌው ላይ ወጪ ተደርጎበት (ጥቅም ላይ ውሎ) እንደሆነ እናጣራለን
+    db.query(`SELECT COUNT(*) as usage_count FROM cafe_expenses WHERE item_name = ?`, [item_name], (err, results) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json({ message: 'ዕቃው ከማከማቻው ተሰርዟል!' });
+        
+        if (results[0].usage_count > 0) {
+            // ካፌው ከተጠቀመበት ማጥፋት አይቻልም (የስህተት መልዕክት እንመልሳለን)
+            return res.status(400).json({ error: `ይህንን ዕቃ (${item_name}) ካፌው ውስጥ እየተጠቀሙበት ስለሆነ ማጥፋት አይቻልም!` });
+        }
+        
+        // ካፌው ካልተጠቀመበት ግን እናጠፋዋለን
+        db.query(`DELETE FROM inventory WHERE id = ?`, [item_id], (err2) => {
+            if (err2) return res.status(500).json({ error: err2.message });
+            res.json({ message: 'ዕቃው ከማከማቻው ተሰርዟል!' });
+        });
     });
 });
 
